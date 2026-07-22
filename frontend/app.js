@@ -402,6 +402,7 @@ function randeazaSectiune() {
   else if (sectiuneActiva === "combustibil") randeazaCombustibil();
   else if (sectiuneActiva === "service") randeazaService();
   else if (sectiuneActiva === "harta") randeazaHarta();
+  else if (sectiuneActiva === "rapoarte") randeazaRapoarte();
 }
 
 // ---------- secțiunea DOCUMENTE ----------
@@ -1044,6 +1045,121 @@ async function randeazaHarta() {
     });
     hartaSectiuneMapa.fitBounds(L.featureGroup(grupMarkeri).getBounds().pad(0.2));
   }, 50);
+}
+
+// ---------- secțiunea RAPOARTE ----------
+
+const LUNI_RO = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sep", "oct", "nov", "dec"];
+let granularitateRaport = "lunar";
+
+function inceputSaptamana(d) {
+  const copie = new Date(d);
+  const ziua = copie.getDay() || 7; // duminică=0 → 7
+  copie.setDate(copie.getDate() - ziua + 1); // luni
+  copie.setHours(0, 0, 0, 0);
+  return copie;
+}
+
+function cheieSiEticheta(dataStr, granularitate) {
+  const d = new Date(dataStr + "T00:00:00");
+  if (granularitate === "saptamanal") {
+    const luni = inceputSaptamana(d);
+    const cheie = luni.toISOString().slice(0, 10);
+    return { cheie, eticheta: `${luni.getDate()} ${LUNI_RO[luni.getMonth()]}` };
+  }
+  if (granularitate === "anual") {
+    return { cheie: String(d.getFullYear()), eticheta: String(d.getFullYear()) };
+  }
+  const cheie = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return { cheie, eticheta: `${LUNI_RO[d.getMonth()]} ${d.getFullYear()}` };
+}
+
+function grupeazaPeInterval(cheltuieli, granularitate) {
+  const grupuri = {};
+  cheltuieli.forEach((c) => {
+    const { cheie, eticheta } = cheieSiEticheta(c.data, granularitate);
+    if (!grupuri[cheie]) grupuri[cheie] = { cheie, eticheta, totalSuma: 0, totalCombustibil: 0, totalLitri: 0 };
+    grupuri[cheie].totalSuma += Number(c.suma);
+    if (c.tip === "combustibil") {
+      grupuri[cheie].totalCombustibil += Number(c.suma);
+      if (c.litri) grupuri[cheie].totalLitri += Number(c.litri);
+    }
+  });
+  const limita = granularitate === "saptamanal" ? 8 : granularitate === "anual" ? 6 : 12;
+  return Object.values(grupuri)
+    .sort((a, b) => (a.cheie > b.cheie ? 1 : -1))
+    .slice(-limita);
+}
+
+function deseneazaGraficBare(container, date) {
+  if (date.length === 0) {
+    container.innerHTML = `<div class="gol"><p>Nu sunt încă destule date pentru acest interval.</p></div>`;
+    return;
+  }
+  const maxim = Math.max(...date.map((d) => d.totalSuma), 1);
+  const latimeBara = 100 / date.length;
+  const bare = date
+    .map((d, i) => {
+      const inaltimeProc = (d.totalSuma / maxim) * 100;
+      const x = i * latimeBara;
+      return `
+        <div style="position:absolute; left:${x}%; width:${latimeBara}%; bottom:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding:0 4px; box-sizing:border-box;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-muted); margin-bottom:4px; white-space:nowrap;">${Math.round(d.totalSuma)}</div>
+          <div style="width:100%; max-width:36px; height:${Math.max(2, inaltimeProc)}%; background:linear-gradient(180deg, var(--accent), var(--accent-strong)); border-radius:4px 4px 0 0;"></div>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:6px; white-space:nowrap; text-align:center;">${d.eticheta}</div>
+        </div>
+      `;
+    })
+    .join("");
+  container.innerHTML = `<div style="position:relative; height:220px; padding-bottom:28px;">${bare}</div>`;
+}
+
+async function randeazaRapoarte() {
+  elContinut.innerHTML = `<p class="incarcare">Se încarcă...</p>`;
+  const { data } = await supa.from("cheltuieli").select("*").eq("vehicul_id", vehiculActivId);
+  const cheltuieli = data || [];
+
+  elContinut.innerHTML = `
+    <h2 class="titlu-sectiune">Rapoarte</h2>
+    <p class="subtitlu-sectiune">Cheltuielile tale în timp — săptămânal, lunar sau anual.</p>
+    <div class="chipuri" id="chipuri-granularitate" style="margin-bottom:18px;">
+      <button class="chip${granularitateRaport === "saptamanal" ? " activ" : ""}" data-g="saptamanal">Săptămânal</button>
+      <button class="chip${granularitateRaport === "lunar" ? " activ" : ""}" data-g="lunar">Lunar</button>
+      <button class="chip${granularitateRaport === "anual" ? " activ" : ""}" data-g="anual">Anual</button>
+    </div>
+    <div id="zona-grafic" class="card"></div>
+    <div id="zona-rezumat-raport"></div>
+  `;
+
+  function actualizeaza() {
+    const grupate = grupeazaPeInterval(cheltuieli, granularitateRaport);
+    deseneazaGraficBare(document.getElementById("zona-grafic"), grupate);
+
+    const totalPerioada = grupate.reduce((s, g) => s + g.totalSuma, 0);
+    const totalCombustibilPerioada = grupate.reduce((s, g) => s + g.totalCombustibil, 0);
+    const totalLitriPerioada = grupate.reduce((s, g) => s + g.totalLitri, 0);
+    const mediePePerioada = grupate.length ? totalPerioada / grupate.length : 0;
+
+    document.getElementById("zona-rezumat-raport").innerHTML = `
+      <div class="rezumat" style="margin-top:16px;">
+        <div class="pastila"><b>${formatBani(totalPerioada)}</b>Total afișat</div>
+        <div class="pastila"><b>${formatBani(totalCombustibilPerioada)}</b>Din care combustibil</div>
+        <div class="pastila"><b>${totalLitriPerioada ? totalLitriPerioada.toFixed(0) + " L" : "—"}</b>Litri cumpărați</div>
+        <div class="pastila"><b>${formatBani(mediePePerioada)}</b>Medie/perioadă</div>
+      </div>
+    `;
+  }
+
+  document.querySelectorAll("#chipuri-granularitate .chip").forEach((chip) => {
+    chip.onclick = () => {
+      granularitateRaport = chip.dataset.g;
+      document.querySelectorAll("#chipuri-granularitate .chip").forEach((c) => c.classList.remove("activ"));
+      chip.classList.add("activ");
+      actualizeaza();
+    };
+  });
+
+  actualizeaza();
 }
 
 // ---------- notificări push ----------
