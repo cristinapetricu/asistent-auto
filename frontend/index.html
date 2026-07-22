@@ -57,8 +57,10 @@
     <header class="antet">
       <div class="antet-stanga">
         <select id="selector-vehicul" class="selector-vehicul"></select>
+        <button id="btn-editeaza-vehicul" class="buton-icon" title="Editează vehiculul">✎</button>
       </div>
       <div class="antet-dreapta">
+        <button id="btn-partajare" class="buton-icon" title="Partajează vehiculul">👥</button>
         <button id="btn-adauga-vehicul" class="buton-icon" title="Adaugă vehicul">+</button>
         <button id="btn-delogare" class="buton-icon" title="Ieși din cont">⏻</button>
       </div>
@@ -90,6 +92,10 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.77z"/></svg>
         <span>Service</span>
       </button>
+      <button class="tab-navigare" data-sectiune="harta">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+        <span>Hartă</span>
+      </button>
     </nav>
   </div>
 
@@ -116,6 +122,10 @@
       <div>
         <label class="eticheta">Notă (opțional)</label>
         <input type="text" data-rol="nota" placeholder="opțional" />
+      </div>
+      <div data-rol="zona-km-tinta">
+        <label class="eticheta">Kilometraj țintă (opțional — pentru predicție)</label>
+        <input type="number" min="0" data-rol="km-tinta" placeholder="ex: 90000, pt. revizie" />
       </div>
       <div class="butoane-formular">
         <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
@@ -210,6 +220,11 @@
           <input type="text" data-rol="unde" placeholder="ex: Service Auto Ion" />
         </div>
       </div>
+      <div>
+        <label class="eticheta">Locație pe hartă (opțional)</label>
+        <button type="button" class="buton buton-secundar buton-lat" data-rol="buton-locatie">📍 Adaugă locație</button>
+        <div class="locatie-selectata ascuns" data-rol="locatie-text"></div>
+      </div>
       <div class="butoane-formular">
         <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
         <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
@@ -227,12 +242,43 @@
         <label class="eticheta">Număr înmatriculare (opțional)</label>
         <input type="text" data-rol="numar" placeholder="ex: GJ 00 XYZ" />
       </div>
+      <div>
+        <label class="eticheta">Capacitate rezervor, litri (opțional — pentru estimarea autonomiei)</label>
+        <input type="number" min="0" data-rol="capacitate" placeholder="ex: 50" />
+      </div>
       <div class="butoane-formular">
         <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
         <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
       </div>
     </div>
   </template>
+
+  <!-- PARTAJARE VEHICUL -->
+  <div id="overlay-partajare" class="overlay-harta ascuns">
+    <div class="harta-panou">
+      <div class="harta-antet">
+        <span>Partajează vehiculul</span>
+        <button id="partajare-inchide" class="buton-icon">✕</button>
+      </div>
+      <div class="harta-jos">
+        <div id="tab-partajare" class="tab-auth">
+          <button class="tab-mic-buton activ" data-tab="invita">Invită pe cineva</button>
+          <button class="tab-mic-buton" data-tab="alatura">Am un cod</button>
+        </div>
+        <div id="zona-invita">
+          <p class="auth-nota" style="margin-top:0;">Apasă butonul, apoi trimite codul generat persoanei — îl introduce în aplicația ei, la „Am un cod”.</p>
+          <button id="btn-genereaza-cod" class="buton buton-primar buton-lat">Generează cod de invitație</button>
+          <div id="cod-generat" class="locatie-selectata ascuns" style="margin-top:12px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:18px;"></div>
+        </div>
+        <div id="zona-alatura" class="ascuns">
+          <label class="eticheta">Cod de invitație</label>
+          <input type="text" id="camp-cod-invitatie" placeholder="lipește codul primit" />
+          <button id="btn-foloseste-cod" class="buton buton-primar buton-lat" style="margin-top:12px;">Alătură-te</button>
+          <div id="alatura-mesaj" class="auth-mesaj ascuns" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

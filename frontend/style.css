@@ -78,7 +78,7 @@ input:focus, button:focus-visible, select:focus-visible {
   margin-bottom: 20px;
 }
 
-.tab-auth-buton {
+.tab-auth-buton, .tab-mic-buton {
   flex: 1;
   background: transparent;
   border: none;
@@ -91,7 +91,7 @@ input:focus, button:focus-visible, select:focus-visible {
   cursor: pointer;
 }
 
-.tab-auth-buton.activ {
+.tab-auth-buton.activ, .tab-mic-buton.activ {
   background: var(--surface-2);
   color: var(--text);
 }
@@ -182,6 +182,7 @@ input[type="text"], input[type="email"], input[type="password"], input[type="dat
   max-width: 60vw;
 }
 
+.antet-stanga { display: flex; align-items: center; gap: 8px; }
 .antet-dreapta { display: flex; gap: 8px; }
 
 .buton-icon {
