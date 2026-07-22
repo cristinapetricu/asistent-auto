@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -60,6 +61,8 @@
         <button id="btn-editeaza-vehicul" class="buton-icon" title="Editează vehiculul">✎</button>
       </div>
       <div class="antet-dreapta">
+        <button id="btn-tema" class="buton-icon" title="Schimbă tema">☀️</button>
+        <button id="btn-checklist" class="buton-icon" title="Checklist călătorie">✅</button>
         <button id="btn-partajare" class="buton-icon" title="Partajează vehiculul">👥</button>
         <button id="btn-adauga-vehicul" class="buton-icon" title="Adaugă vehicul">+</button>
         <button id="btn-delogare" class="buton-icon" title="Ieși din cont">⏻</button>
@@ -130,6 +133,17 @@
       <div data-rol="zona-km-tinta">
         <label class="eticheta">Kilometraj țintă (opțional — pentru predicție)</label>
         <input type="number" min="0" data-rol="km-tinta" placeholder="ex: 90000, pt. revizie" />
+      </div>
+      <div>
+        <label class="chip" data-rol="chip-recurent" style="display:inline-flex; align-items:center; gap:6px;">
+          <input type="checkbox" data-rol="recurent" style="width:auto;" /> Repetă automat
+        </label>
+        <div class="rand-dublu ascuns" data-rol="zona-recurenta" style="margin-top:10px;">
+          <div>
+            <label class="eticheta">La fiecare (luni)</label>
+            <input type="number" min="1" data-rol="recurenta-luni" value="12" />
+          </div>
+        </div>
       </div>
       <div class="butoane-formular">
         <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
@@ -282,6 +296,7 @@
           <p class="auth-nota" style="margin-top:0;">Apasă butonul, apoi trimite codul generat persoanei — îl introduce în aplicația ei, la „Am un cod”.</p>
           <button id="btn-genereaza-cod" class="buton buton-primar buton-lat">Generează cod de invitație</button>
           <div id="cod-generat" class="locatie-selectata ascuns" style="margin-top:12px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:18px;"></div>
+          <div id="cod-qr-zona" class="ascuns" style="margin-top:12px; text-align:center;"><canvas id="cod-qr-canvas"></canvas></div>
         </div>
         <div id="zona-alatura" class="ascuns">
           <label class="eticheta">Cod de invitație</label>
@@ -289,6 +304,19 @@
           <button id="btn-foloseste-cod" class="buton buton-primar buton-lat" style="margin-top:12px;">Alătură-te</button>
           <div id="alatura-mesaj" class="auth-mesaj ascuns" style="margin-top:12px;"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECKLIST ÎNAINTE DE PLECARE -->
+  <div id="overlay-checklist" class="overlay-harta ascuns">
+    <div class="harta-panou">
+      <div class="harta-antet">
+        <span>Checklist înainte de plecare</span>
+        <button id="checklist-inchide" class="buton-icon">✕</button>
+      </div>
+      <div class="harta-jos">
+        <div id="lista-checklist" class="lista"></div>
       </div>
     </div>
   </div>

@@ -1,3 +1,10 @@
+// ---------- temă (aplicată imediat, inclusiv pe ecranul de login) ----------
+
+(function initializeazaTema() {
+  const salvata = localStorage.getItem("tema") || "intunecata";
+  document.documentElement.setAttribute("data-tema", salvata);
+})();
+
 // ---------- inițializare ----------
 
 const supa = window.supabase.createClient(window.CONFIG.SUPABASE_URL, window.CONFIG.SUPABASE_ANON_KEY);
@@ -31,6 +38,18 @@ const elApp = document.getElementById("app");
 const elContinut = document.getElementById("continut-principal");
 const elSelectorVehicul = document.getElementById("selector-vehicul");
 const elMesajAuth = document.getElementById("auth-mesaj");
+
+const elBtnTema = document.getElementById("btn-tema");
+function actualizeazaIconTema() {
+  elBtnTema.textContent = document.documentElement.getAttribute("data-tema") === "deschisa" ? "🌙" : "☀️";
+}
+actualizeazaIconTema();
+elBtnTema.onclick = () => {
+  const nou = document.documentElement.getAttribute("data-tema") === "deschisa" ? "intunecata" : "deschisa";
+  document.documentElement.setAttribute("data-tema", nou);
+  localStorage.setItem("tema", nou);
+  actualizeazaIconTema();
+};
 
 // ---------- utilitare ----------
 
@@ -418,12 +437,19 @@ document.getElementById("btn-genereaza-cod").onclick = async () => {
   const cod = codAleatoriu();
   const { error } = await supa.from("invitatii").insert({ vehicul_id: vehiculActivId, cod, creat_de: sesiune.session.user.id });
   const elCod = document.getElementById("cod-generat");
+  const elQrZona = document.getElementById("cod-qr-zona");
   if (error) {
     elCod.textContent = "Nu am putut genera codul. Încearcă din nou.";
-  } else {
-    elCod.textContent = cod;
+    elCod.classList.remove("ascuns");
+    return;
   }
+  elCod.textContent = cod;
   elCod.classList.remove("ascuns");
+  const urlInvitatie = `${location.origin}${location.pathname}?cod=${encodeURIComponent(cod)}`;
+  if (window.QRCode) {
+    elQrZona.classList.remove("ascuns");
+    window.QRCode.toCanvas(document.getElementById("cod-qr-canvas"), urlInvitatie, { width: 180 });
+  }
 };
 
 document.getElementById("btn-foloseste-cod").onclick = async () => {
@@ -487,7 +513,19 @@ function randeazaSectiune() {
 async function randeazaDocumente() {
   elContinut.innerHTML = `<p class="incarcare">Se încarcă...</p>`;
   const { data } = await supa.from("documente").select("*").eq("vehicul_id", vehiculActivId);
-  const documente = (data || []).sort((a, b) => zileRamase(a.data_expirare) - zileRamase(b.data_expirare));
+  let documente = data || [];
+
+  // remindere recurente: dacă a trecut data, o mutăm automat înainte cu N luni, ca să nu mai trebuiască adăugată manual
+  for (const doc of documente) {
+    if (doc.recurent && doc.recurenta_luni && zileRamase(doc.data_expirare) < 0) {
+      let dataNoua = new Date(doc.data_expirare + "T00:00:00");
+      while (dataNoua < new Date()) dataNoua.setMonth(dataNoua.getMonth() + doc.recurenta_luni);
+      const dataNouaStr = dataNoua.toISOString().slice(0, 10);
+      await supa.from("documente").update({ data_expirare: dataNouaStr }).eq("id", doc.id);
+      doc.data_expirare = dataNouaStr;
+    }
+  }
+  documente = documente.sort((a, b) => zileRamase(a.data_expirare) - zileRamase(b.data_expirare));
 
   const { data: cheltuieliKm } = await supa.from("cheltuieli").select("data, km").eq("vehicul_id", vehiculActivId).not("km", "is", null);
   const kmPeZi = calculeazaKmPeZi(cheltuieliKm || []);
@@ -504,6 +542,7 @@ async function randeazaDocumente() {
   let html = `
     <h2 class="titlu-sectiune">Documente</h2>
     <p class="subtitlu-sectiune">Remindere pentru documentele mașinii selectate.</p>
+    <button id="btn-anvelope-rapid" class="buton buton-secundar buton-lat" style="margin-bottom:16px;">🛞 Adaugă remindere anvelope de sezon</button>
   `;
 
   if (documente.length > 0) {
@@ -516,6 +555,18 @@ async function randeazaDocumente() {
   }
 
   elContinut.innerHTML = html;
+  document.getElementById("btn-anvelope-rapid").onclick = async () => {
+    const { data: sesiune } = await supa.auth.getSession();
+    const azi = new Date();
+    const anCurent = azi.getFullYear();
+    const dataIarna = new Date(azi.getMonth() < 10 ? anCurent : anCurent + 1, 10, 1); // 1 noiembrie
+    const dataVara = new Date(azi.getMonth() < 3 ? anCurent : anCurent + 1, 3, 1); // 1 aprilie
+    await supa.from("documente").insert([
+      { user_id: sesiune.session.user.id, vehicul_id: vehiculActivId, nume: "Anvelope de iarnă", tip: "altul", data_expirare: dataIarna.toISOString().slice(0, 10), prealarma: 14, recurent: true, recurenta_luni: 12 },
+      { user_id: sesiune.session.user.id, vehicul_id: vehiculActivId, nume: "Anvelope de vară", tip: "altul", data_expirare: dataVara.toISOString().slice(0, 10), prealarma: 14, recurent: true, recurenta_luni: 12 },
+    ]);
+    randeazaDocumente();
+  };
 
   if (documente.length === 0 && !formularNouDeschis) {
     const gol = document.createElement("div");
@@ -558,7 +609,7 @@ async function randeazaDocumente() {
       <div>
         <div class="card-eticheta" style="color:${s.culoare}">${s.eticheta}</div>
         <div class="card-nume">${doc.nume}</div>
-        <div class="card-detalii">Expiră ${formatDataRO(doc.data_expirare)}${doc.nota ? " · " + doc.nota : ""}</div>
+        <div class="card-detalii">Expiră ${formatDataRO(doc.data_expirare)}${doc.nota ? " · " + doc.nota : ""}${doc.recurent ? " · 🔁 se repetă automat" : ""}</div>
         ${predictieKm}
       </div>
       <div class="card-dreapta">
@@ -602,6 +653,10 @@ function creeazaFormularDocument(existent) {
   const campNota = card.querySelector('[data-rol="nota"]');
   const campPrealarma = card.querySelector('[data-rol="prealarma"]');
   const campKmTinta = card.querySelector('[data-rol="km-tinta"]');
+  const campRecurent = card.querySelector('[data-rol="recurent"]');
+  const zonaRecurenta = card.querySelector('[data-rol="zona-recurenta"]');
+  const campRecurentaLuni = card.querySelector('[data-rol="recurenta-luni"]');
+  campRecurent.onchange = () => zonaRecurenta.classList.toggle("ascuns", !campRecurent.checked);
   let tipSelectat = existent?.tip || "rovinieta";
 
   TIPURI_DOCUMENT.forEach((t) => {
@@ -624,6 +679,9 @@ function creeazaFormularDocument(existent) {
     campNota.value = existent.nota || "";
     campPrealarma.value = existent.prealarma || 7;
     campKmTinta.value = existent.km_tinta || "";
+    campRecurent.checked = !!existent.recurent;
+    zonaRecurenta.classList.toggle("ascuns", !existent.recurent);
+    campRecurentaLuni.value = existent.recurenta_luni || 12;
   }
 
   card.querySelector('[data-rol="salveaza"]').onclick = async () => {
@@ -635,6 +693,8 @@ function creeazaFormularDocument(existent) {
       nota: campNota.value.trim(),
       prealarma: Number(campPrealarma.value) || 7,
       km_tinta: campKmTinta.value ? Number(campKmTinta.value) : null,
+      recurent: campRecurent.checked,
+      recurenta_luni: campRecurent.checked ? Number(campRecurentaLuni.value) || 12 : null,
     };
     if (existent) {
       await supa.from("documente").update(valori).eq("id", existent.id);
@@ -682,6 +742,13 @@ async function randeazaCombustibil() {
     pretMediuLitru = (sumaTotalaLitri / litriTotali2).toFixed(2);
   }
 
+  const toateCuKm = cheltuieli.filter((c) => c.km != null).sort((a, b) => a.km - b.km);
+  let costPeKm = null;
+  if (toateCuKm.length >= 2) {
+    const distantaTotala = toateCuKm[toateCuKm.length - 1].km - toateCuKm[0].km;
+    if (distantaTotala > 0) costPeKm = (totalGeneral / distantaTotala).toFixed(2);
+  }
+
   elContinut.innerHTML = `
     <h2 class="titlu-sectiune">Combustibil & cheltuieli</h2>
     <p class="subtitlu-sectiune">Jurnalul alimentărilor și al celorlalte cheltuieli pentru acest vehicul.</p>
@@ -690,6 +757,7 @@ async function randeazaCombustibil() {
       <div class="pastila"><b>${formatBani(totalCombustibil)}</b>Combustibil</div>
       <div class="pastila"><b>${consumMediu ? consumMediu + " L" : "—"}</b>Consum mediu/100km</div>
       <div class="pastila"><b>${pretMediuLitru ? pretMediuLitru + " lei" : "—"}</b>Preț mediu/litru</div>
+      <div class="pastila"><b>${costPeKm ? costPeKm + " lei" : "—"}</b>Cost real/km</div>
     </div>
     <button id="btn-autonomie" class="buton buton-secundar buton-lat" style="margin-bottom:10px;">⛽ Estimează cât mai pot merge</button>
     <button id="btn-impartire" class="buton buton-secundar buton-lat" style="margin-bottom:16px;">💰 Împarte cheltuielile</button>
@@ -1251,24 +1319,27 @@ function grupeazaPeInterval(cheltuieli, granularitate) {
   });
   const limita = granularitate === "saptamanal" ? 8 : granularitate === "anual" ? 6 : 12;
   return Object.values(grupuri)
+    .map((g) => ({ ...g, pretMediuLitru: g.totalLitri > 0 ? g.totalCombustibil / g.totalLitri : null }))
     .sort((a, b) => (a.cheie > b.cheie ? 1 : -1))
     .slice(-limita);
 }
 
-function deseneazaGraficBare(container, date) {
-  if (date.length === 0) {
+function deseneazaGraficBare(container, date, extractor, formatValoare) {
+  const valori = date.map((d) => extractor(d)).filter((v) => v != null);
+  if (valori.length === 0) {
     container.innerHTML = `<div class="gol"><p>Nu sunt încă destule date pentru acest interval.</p></div>`;
     return;
   }
-  const maxim = Math.max(...date.map((d) => d.totalSuma), 1);
+  const maxim = Math.max(...valori, 0.01);
   const latimeBara = 100 / date.length;
   const bare = date
     .map((d, i) => {
-      const inaltimeProc = (d.totalSuma / maxim) * 100;
+      const valoare = extractor(d);
+      const inaltimeProc = valoare != null ? (valoare / maxim) * 100 : 0;
       const x = i * latimeBara;
       return `
         <div style="position:absolute; left:${x}%; width:${latimeBara}%; bottom:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding:0 4px; box-sizing:border-box;">
-          <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-muted); margin-bottom:4px; white-space:nowrap;">${Math.round(d.totalSuma)}</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-muted); margin-bottom:4px; white-space:nowrap;">${valoare != null ? formatValoare(valoare) : "—"}</div>
           <div style="width:100%; max-width:36px; height:${Math.max(2, inaltimeProc)}%; background:linear-gradient(180deg, var(--accent), var(--accent-strong)); border-radius:4px 4px 0 0;"></div>
           <div style="font-size:10px; color:var(--text-muted); margin-top:6px; white-space:nowrap; text-align:center;">${d.eticheta}</div>
         </div>
@@ -1283,9 +1354,24 @@ async function randeazaRapoarte() {
   const { data } = await supa.from("cheltuieli").select("*").eq("vehicul_id", vehiculActivId);
   const cheltuieli = data || [];
 
+  const bucketiLunari = grupeazaPeInterval(cheltuieli, "lunar");
+  let comparatieHtml = "";
+  if (bucketiLunari.length >= 2) {
+    const lunaCurenta = bucketiLunari[bucketiLunari.length - 1];
+    const lunaTrecuta = bucketiLunari[bucketiLunari.length - 2];
+    if (lunaTrecuta.totalSuma > 0) {
+      const diferentaProc = Math.round(((lunaCurenta.totalSuma - lunaTrecuta.totalSuma) / lunaTrecuta.totalSuma) * 100);
+      const mai = diferentaProc >= 0;
+      comparatieHtml = `<div class="card" style="margin-bottom:16px; color:${mai ? "var(--warning)" : "var(--success)"};">
+        📊 Luna asta ai cheltuit ${formatBani(lunaCurenta.totalSuma)} — ${mai ? "cu " + diferentaProc + "% mai mult" : "cu " + Math.abs(diferentaProc) + "% mai puțin"} decât luna trecută (${formatBani(lunaTrecuta.totalSuma)})
+      </div>`;
+    }
+  }
+
   elContinut.innerHTML = `
     <h2 class="titlu-sectiune">Rapoarte</h2>
     <p class="subtitlu-sectiune">Cheltuielile tale în timp — săptămânal, lunar sau anual.</p>
+    ${comparatieHtml}
     <div class="chipuri" id="chipuri-granularitate" style="margin-bottom:18px;">
       <button class="chip${granularitateRaport === "saptamanal" ? " activ" : ""}" data-g="saptamanal">Săptămânal</button>
       <button class="chip${granularitateRaport === "lunar" ? " activ" : ""}" data-g="lunar">Lunar</button>
@@ -1293,11 +1379,15 @@ async function randeazaRapoarte() {
     </div>
     <div id="zona-grafic" class="card"></div>
     <div id="zona-rezumat-raport"></div>
+    <div class="eticheta-tip" style="margin-top:22px;">Evoluția prețului la pompă (lei/litru)</div>
+    <div id="zona-grafic-pret" class="card" style="margin-top:8px;"></div>
+    <button id="btn-export-pdf" class="buton buton-secundar buton-lat" style="margin-top:18px;">📄 Exportă PDF cu tot istoricul</button>
   `;
 
   function actualizeaza() {
     const grupate = grupeazaPeInterval(cheltuieli, granularitateRaport);
-    deseneazaGraficBare(document.getElementById("zona-grafic"), grupate);
+    deseneazaGraficBare(document.getElementById("zona-grafic"), grupate, (d) => d.totalSuma, (v) => Math.round(v) + " lei");
+    deseneazaGraficBare(document.getElementById("zona-grafic-pret"), grupate, (d) => d.pretMediuLitru, (v) => v.toFixed(2));
 
     const totalPerioada = grupate.reduce((s, g) => s + g.totalSuma, 0);
     const totalCombustibilPerioada = grupate.reduce((s, g) => s + g.totalCombustibil, 0);
@@ -1323,8 +1413,131 @@ async function randeazaRapoarte() {
     };
   });
 
+  document.getElementById("btn-export-pdf").onclick = () => exportaPDF();
+
   actualizeaza();
 }
+
+// ---------- export PDF ----------
+
+let jsPdfIncarcat = false;
+function incarcaJsPdf() {
+  return new Promise((resolve, reject) => {
+    if (jsPdfIncarcat || window.jspdf) { jsPdfIncarcat = true; resolve(); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    script.onload = () => { jsPdfIncarcat = true; resolve(); };
+    script.onerror = () => reject(new Error("Nu s-a putut încărca instrumentul de export."));
+    document.head.appendChild(script);
+  });
+}
+
+async function exportaPDF() {
+  await incarcaJsPdf();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const vehiculActiv = vehicule.find((v) => v.id === vehiculActivId);
+
+  const [{ data: documente }, { data: cheltuieli }, { data: serviceIstorie }] = await Promise.all([
+    supa.from("documente").select("*").eq("vehicul_id", vehiculActivId),
+    supa.from("cheltuieli").select("*").eq("vehicul_id", vehiculActivId).order("data"),
+    supa.from("service_istorie").select("*").eq("vehicul_id", vehiculActivId).order("data"),
+  ]);
+
+  let y = 20;
+  doc.setFontSize(18);
+  doc.text(`Istoric — ${vehiculActiv?.nume || "Vehicul"}`, 14, y);
+  y += 6;
+  doc.setFontSize(10);
+  doc.text(`Generat la ${new Date().toLocaleDateString("ro-RO")}${vehiculActiv?.numar_inmatriculare ? " · " + vehiculActiv.numar_inmatriculare : ""}`, 14, y);
+  y += 12;
+
+  function sectiune(titlu) {
+    doc.setFontSize(13);
+    doc.text(titlu, 14, y);
+    y += 7;
+    doc.setFontSize(10);
+  }
+
+  function randPdf(text) {
+    if (y > 280) { doc.addPage(); y = 20; }
+    doc.text(text, 14, y);
+    y += 6;
+  }
+
+  sectiune("Documente");
+  (documente || []).forEach((d) => randPdf(`${d.nume} — expiră ${formatDataRO(d.data_expirare)}${d.nota ? " · " + d.nota : ""}`));
+  if (!documente?.length) randPdf("Niciunul.");
+  y += 6;
+
+  sectiune("Istoric service");
+  (serviceIstorie || []).forEach((i) => randPdf(`${formatDataRO(i.data)} — ${i.descriere}${i.km ? " · " + i.km + " km" : ""}${i.cost ? " · " + formatBani(i.cost) : ""}`));
+  if (!serviceIstorie?.length) randPdf("Niciunul.");
+  y += 6;
+
+  sectiune("Cheltuieli");
+  (cheltuieli || []).forEach((c) => randPdf(`${formatDataRO(c.data)} — ${c.tip}${c.descriere ? " (" + c.descriere + ")" : ""} · ${formatBani(c.suma)}`));
+  if (!cheltuieli?.length) randPdf("Niciuna.");
+  y += 6;
+  const totalGeneral = (cheltuieli || []).reduce((s, c) => s + Number(c.suma), 0);
+  doc.setFontSize(12);
+  randPdf(`Total cheltuieli: ${formatBani(totalGeneral)}`);
+
+  doc.save(`istoric-${(vehiculActiv?.nume || "vehicul").replace(/\s+/g, "-").toLowerCase()}.pdf`);
+}
+
+// ---------- checklist înainte de plecare ----------
+
+const ITEMI_CHECKLIST = ["Nivel ulei motor", "Presiune anvelope", "Anvelopă de rezervă", "Trusă medicală", "Stingător", "Lichid parbriz", "Lichid frână", "Faruri și semnalizare"];
+
+async function deschideChecklist() {
+  const overlay = document.getElementById("overlay-checklist");
+  const lista = document.getElementById("lista-checklist");
+  overlay.classList.remove("ascuns");
+  lista.innerHTML = `<p class="incarcare">Se încarcă...</p>`;
+
+  const { data: verificari } = await supa
+    .from("checklist_verificari")
+    .select("*")
+    .eq("vehicul_id", vehiculActivId)
+    .order("data_verificare", { ascending: false });
+
+  function ultimaVerificare(item) {
+    return (verificari || []).find((v) => v.item === item);
+  }
+
+  lista.innerHTML = "";
+  ITEMI_CHECKLIST.forEach((item) => {
+    const ultima = ultimaVerificare(item);
+    const zileDeLaVerificare = ultima ? Math.round((new Date() - new Date(ultima.data_verificare)) / 86400000) : null;
+    const card = document.createElement("div");
+    card.className = "card card-lista-simpla";
+    card.innerHTML = `
+      <div class="stanga">
+        <div class="card-nume">${item}</div>
+        <div class="card-detalii">${ultima ? `Verificat acum ${zileDeLaVerificare} zile` : "Niciodată verificat"}</div>
+      </div>
+      <button class="buton buton-secundar" data-rol="bifeaza">Bifează azi</button>
+    `;
+    card.querySelector('[data-rol="bifeaza"]').onclick = async () => {
+      const { data: sesiune } = await supa.auth.getSession();
+      await supa.from("checklist_verificari").insert({
+        vehicul_id: vehiculActivId,
+        item,
+        data_verificare: new Date().toISOString().slice(0, 10),
+        creat_de: sesiune.session.user.id,
+      });
+      deschideChecklist();
+    };
+    lista.appendChild(card);
+  });
+}
+
+document.getElementById("btn-checklist").onclick = () => {
+  if (!vehiculActivId) return;
+  deschideChecklist();
+};
+document.getElementById("checklist-inchide").onclick = () => document.getElementById("overlay-checklist").classList.add("ascuns");
 
 // ---------- notificări push ----------
 
@@ -1398,4 +1611,13 @@ async function porneste() {
   await incarcaVehicule();
   randeazaSectiune();
   initializeazaNotificari();
+
+  const parametri = new URLSearchParams(location.search);
+  const codDinLink = parametri.get("cod");
+  if (codDinLink) {
+    document.getElementById("btn-partajare").click();
+    document.querySelector('#tab-partajare [data-tab="alatura"]').click();
+    document.getElementById("camp-cod-invitatie").value = codDinLink;
+    history.replaceState(null, "", location.pathname);
+  }
 }

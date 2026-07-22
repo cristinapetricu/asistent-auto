@@ -13,6 +13,21 @@
   --mono-bg: #0B0E14;
 }
 
+:root[data-tema="deschisa"] {
+  --bg: #F4F6F8;
+  --surface: #FFFFFF;
+  --surface-2: #EDF0F3;
+  --border: #DCE1E7;
+  --accent: #1E8880;
+  --accent-strong: #166D67;
+  --text: #1B222C;
+  --text-muted: #667080;
+  --danger: #C6453A;
+  --warning: #B9791E;
+  --success: #2F8F5C;
+  --mono-bg: #EAEDF1;
+}
+
 * { box-sizing: border-box; }
 
 body {
