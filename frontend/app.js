@@ -80,6 +80,83 @@ function calculeazaKmPeZi(cheltuieliCuKm) {
   return kmTotali / zileTotale;
 }
 
+// ---------- extragere sumă/litri/km dintr-un text (folosit la OCR și la voce) ----------
+
+function extrageValoriDinText(text) {
+  const curat = text.toLowerCase().replace(/,/g, ".");
+  const rezultat = { suma: null, litri: null, km: null };
+
+  const candidatiSuma = [...curat.matchAll(/(\d+(?:\.\d{1,2})?)\s*(?:lei|ron)\b/g)].map((m) => Number(m[1]));
+  if (candidatiSuma.length) rezultat.suma = Math.max(...candidatiSuma);
+
+  const candidatLitri = curat.match(/(\d+(?:\.\d{1,3})?)\s*(?:litri|l)\b/);
+  if (candidatLitri) rezultat.litri = Number(candidatLitri[1]);
+
+  const candidatKm = curat.match(/(\d{4,7})\s*(?:km|kilometri)\b/);
+  if (candidatKm) rezultat.km = Number(candidatKm[1]);
+
+  return rezultat;
+}
+
+let tesseractIncarcat = false;
+function incarcaTesseract() {
+  return new Promise((resolve, reject) => {
+    if (tesseractIncarcat || window.Tesseract) { tesseractIncarcat = true; resolve(); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.onload = () => { tesseractIncarcat = true; resolve(); };
+    script.onerror = () => reject(new Error("Nu s-a putut încărca biblioteca de citire a textului."));
+    document.head.appendChild(script);
+  });
+}
+
+async function scaneazaBon(fisier, elStatus, aplicaValori) {
+  elStatus.classList.remove("ascuns");
+  elStatus.textContent = "Se încarcă instrumentul de citire (prima dată durează puțin)...";
+  try {
+    await incarcaTesseract();
+    elStatus.textContent = "Se citește bonul...";
+    const { data: { text } } = await window.Tesseract.recognize(fisier, "ron+eng");
+    const valori = extrageValoriDinText(text);
+    if (!valori.suma && !valori.litri && !valori.km) {
+      elStatus.textContent = "Nu am reușit să citesc nimic clar — completează manual.";
+      return;
+    }
+    aplicaValori(valori);
+    elStatus.textContent = "Completat din bon — verifică și corectează dacă e nevoie.";
+  } catch (e) {
+    elStatus.textContent = "Scanarea a eșuat — completează manual.";
+  }
+}
+
+function pornesteRecunoastereVocala(elStatus, aplicaValori) {
+  const Recunoastere = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recunoastere) {
+    elStatus.classList.remove("ascuns");
+    elStatus.textContent = "Recunoașterea vocală nu e disponibilă în acest browser (funcționează în Chrome).";
+    return;
+  }
+  const recunoastere = new Recunoastere();
+  recunoastere.lang = "ro-RO";
+  recunoastere.interimResults = false;
+  elStatus.classList.remove("ascuns");
+  elStatus.textContent = "🎤 Ascult...";
+  recunoastere.start();
+  recunoastere.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    const valori = extrageValoriDinText(text);
+    if (!valori.suma && !valori.litri && !valori.km) {
+      elStatus.textContent = `Am auzit „${text}”, dar n-am găsit valori clare — completează manual.`;
+      return;
+    }
+    aplicaValori(valori);
+    elStatus.textContent = `Am auzit „${text}” — verifică și corectează dacă e nevoie.`;
+  };
+  recunoastere.onerror = () => {
+    elStatus.textContent = "Nu am putut asculta — verifică microfonul și încearcă din nou.";
+  };
+}
+
 // ---------- selector de locație pe hartă ----------
 
 let hartaLeaflet = null;
@@ -614,10 +691,12 @@ async function randeazaCombustibil() {
       <div class="pastila"><b>${consumMediu ? consumMediu + " L" : "—"}</b>Consum mediu/100km</div>
       <div class="pastila"><b>${pretMediuLitru ? pretMediuLitru + " lei" : "—"}</b>Preț mediu/litru</div>
     </div>
-    <button id="btn-autonomie" class="buton buton-secundar buton-lat" style="margin-bottom:16px;">⛽ Estimează cât mai pot merge</button>
+    <button id="btn-autonomie" class="buton buton-secundar buton-lat" style="margin-bottom:10px;">⛽ Estimează cât mai pot merge</button>
+    <button id="btn-impartire" class="buton buton-secundar buton-lat" style="margin-bottom:16px;">💰 Împarte cheltuielile</button>
   `;
 
   document.getElementById("btn-autonomie").onclick = () => estimeazaAutonomie(consumMediu, combustibilCuKm);
+  document.getElementById("btn-impartire").onclick = () => aratapImpartireCheltuieli(cheltuieli);
 
   const lista = document.createElement("div");
   lista.className = "lista";
@@ -690,6 +769,22 @@ function creeazaFormularCheltuiala(existent) {
   const wrapLitri = card.querySelector('[data-rol="camp-litri-wrap"]');
   const butonLocatie = card.querySelector('[data-rol="buton-locatie"]');
   const elLocatieText = card.querySelector('[data-rol="locatie-text"]');
+  const butonScaneaza = card.querySelector('[data-rol="buton-scaneaza"]');
+  const butonVocal = card.querySelector('[data-rol="buton-vocal"]');
+  const campFisierBon = card.querySelector('[data-rol="camp-fisier-bon"]');
+  const elStatusCompletareRapida = card.querySelector('[data-rol="status-completare-rapida"]');
+
+  function aplicaValoriDetectate(valori) {
+    if (valori.suma != null) campSuma.value = valori.suma;
+    if (valori.litri != null) campLitri.value = valori.litri;
+    if (valori.km != null) campKm.value = valori.km;
+  }
+
+  butonScaneaza.onclick = () => campFisierBon.click();
+  campFisierBon.onchange = () => {
+    if (campFisierBon.files[0]) scaneazaBon(campFisierBon.files[0], elStatusCompletareRapida, aplicaValoriDetectate);
+  };
+  butonVocal.onclick = () => pornesteRecunoastereVocala(elStatusCompletareRapida, aplicaValoriDetectate);
   let tipSelectat = existent?.tip || "combustibil";
   let locatie = existent?.locatie_text ? { text: existent.locatie_text, lat: existent.latitudine, lon: existent.longitudine } : null;
 
@@ -852,6 +947,75 @@ async function estimeazaAutonomie(consumMediu, combustibilCuKm) {
         : "La consumul tău mediu, ar trebui să fi alimentat deja. Verifică rezervorul.",
     textButon: "Am înțeles",
   });
+}
+
+// ---------- împărțirea cheltuielilor între membrii vehiculului ----------
+
+async function aratapImpartireCheltuieli(cheltuieli) {
+  const { data: membri } = await supa.from("vehicul_membri").select("user_id").eq("vehicul_id", vehiculActivId);
+  if (!membri || membri.length < 2) {
+    await deschideModalMic({
+      titlu: "Doar tu ai acces la acest vehicul",
+      corp: "Împărțirea are sens după ce mai invită cineva (butonul 👥 din antet).",
+      textButon: "Am înțeles",
+    });
+    return;
+  }
+
+  const idMembri = membri.map((m) => m.user_id);
+  const { data: profiluri } = await supa.from("profiles").select("id, email").in("id", idMembri);
+  const { data: sesiune } = await supa.auth.getSession();
+  const euId = sesiune.session.user.id;
+
+  const totalGeneral = cheltuieli.reduce((s, c) => s + Number(c.suma), 0);
+  const cotaCorecta = totalGeneral / idMembri.length;
+
+  const platitPerUtilizator = {};
+  cheltuieli.forEach((c) => {
+    platitPerUtilizator[c.user_id] = (platitPerUtilizator[c.user_id] || 0) + Number(c.suma);
+  });
+
+  const ledger = idMembri.map((id) => {
+    const profil = (profiluri || []).find((p) => p.id === id);
+    const platit = platitPerUtilizator[id] || 0;
+    return {
+      nume: id === euId ? "Tu" : profil?.email || "Membru",
+      platit,
+      sold: platit - cotaCorecta,
+    };
+  });
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60;";
+  const panou = document.createElement("div");
+  panou.className = "card card-formular";
+  panou.style.cssText = "max-width:380px;width:100%;";
+  panou.innerHTML = `
+    <div style="font-weight:700;font-family:'Sora',sans-serif;">Împărțirea cheltuielilor</div>
+    <div style="font-size:13px;color:var(--text-muted);">Total: ${formatBani(totalGeneral)} · cotă corectă/persoană: ${formatBani(cotaCorecta)}</div>
+    <div class="lista">
+      ${ledger
+        .map(
+          (l) => `
+        <div class="card card-lista-simpla">
+          <div class="stanga">
+            <div class="card-nume">${l.nume}</div>
+            <div class="card-detalii">A plătit ${formatBani(l.platit)}</div>
+          </div>
+          <div class="suma" style="color:${l.sold >= 0 ? "var(--success)" : "var(--danger)"};">
+            ${l.sold >= 0 ? "i se cuvin " : "datorează "}${formatBani(Math.abs(l.sold))}
+          </div>
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+    <button id="impartire-inchide" class="buton buton-secundar buton-lat">Închide</button>
+  `;
+  overlay.appendChild(panou);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  panou.querySelector("#impartire-inchide").onclick = () => overlay.remove();
 }
 
 async function randeazaService() {
