@@ -1539,6 +1539,56 @@ document.getElementById("btn-checklist").onclick = () => {
 };
 document.getElementById("checklist-inchide").onclick = () => document.getElementById("overlay-checklist").classList.add("ascuns");
 
+// ---------- alertă meteo cu sfaturi ----------
+
+function interpreteazaVremea(codCod, tempMin) {
+  if (tempMin != null && tempMin <= 2) {
+    return { titlu: "Risc de îngheț/polei", text: `Se prevede minimă de ${Math.round(tempMin)}°C — verifică lichidul de parbriz anti-îngheț și ai grijă la poduri și pasarele, unde înghețul apare primul.` };
+  }
+  if ([71, 73, 75, 77, 85, 86].includes(codCod)) {
+    return { titlu: "Ninsoare prognozată", text: "Verifică anvelopele de iarnă (dacă le ai montate) și presiunea lor — la frig, presiunea scade." };
+  }
+  if ([56, 57, 66, 67].includes(codCod)) {
+    return { titlu: "Ploaie înghețată prognozată", text: "Condiții de polei posibile — redu viteza și mărește distanța față de mașina din față." };
+  }
+  if ([45, 48].includes(codCod)) {
+    return { titlu: "Ceață prognozată", text: "Pornește luminile de întâlnire din timp și mărește distanța de siguranță." };
+  }
+  if ([63, 65, 81, 82, 95, 96, 99].includes(codCod)) {
+    return { titlu: "Ploaie abundentă prognozată", text: "Verifică starea ștergătoarelor și profilul anvelopelor — aderența scade mult pe carosabil ud." };
+  }
+  return null;
+}
+
+async function verificaAlertaMeteo() {
+  if (!navigator.geolocation) return;
+  const azi = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem("alerta-meteo-verificata") === azi) return;
+
+  navigator.geolocation.getCurrentPosition(
+    async (poz) => {
+      try {
+        const { latitude, longitude } = poz.coords;
+        const r = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_min,weathercode&timezone=auto&forecast_days=2`
+        );
+        const d = await r.json();
+        const alerta = interpreteazaVremea(d.daily.weathercode[0], d.daily.temperature_2m_min[0]) || interpreteazaVremea(d.daily.weathercode[1], d.daily.temperature_2m_min[1]);
+        localStorage.setItem("alerta-meteo-verificata", azi);
+        if (alerta) {
+          document.getElementById("banner-meteo-titlu").textContent = alerta.titlu;
+          document.getElementById("banner-meteo-text").textContent = alerta.text;
+          document.getElementById("banner-meteo").classList.remove("ascuns");
+        }
+      } catch (e) {
+        // prognoza nu s-a putut lua — nu arătăm nimic, nu insistăm
+      }
+    },
+    () => {},
+    { timeout: 8000 }
+  );
+}
+
 // ---------- notificări push ----------
 
 async function initializeazaNotificari() {
@@ -1611,6 +1661,7 @@ async function porneste() {
   await incarcaVehicule();
   randeazaSectiune();
   initializeazaNotificari();
+  verificaAlertaMeteo();
 
   const parametri = new URLSearchParams(location.search);
   const codDinLink = parametri.get("cod");
