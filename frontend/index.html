@@ -10,8 +10,10 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -152,12 +154,35 @@
         <label class="eticheta">Descriere (opțional)</label>
         <input type="text" data-rol="descriere" placeholder="ex: Petrom A1" />
       </div>
-      <div class="butoane-formular">
+      <div>
+        <label class="eticheta">Locație (opțional)</label>
+        <button type="button" class="buton buton-secundar buton-lat" data-rol="buton-locatie">📍 Adaugă locație</button>
+        <div class="locatie-selectata ascuns" data-rol="locatie-text"></div>
+      </div>
+      <div class="butoane-formular" data-rol="butoane-jos">
         <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
         <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
       </div>
     </div>
   </template>
+
+  <!-- SELECTOR DE LOCAȚIE PE HARTĂ -->
+  <div id="overlay-harta" class="overlay-harta ascuns">
+    <div class="harta-panou">
+      <div class="harta-antet">
+        <span id="harta-status">Se caută locația...</span>
+        <button id="harta-inchide" class="buton-icon">✕</button>
+      </div>
+      <div id="harta-container" class="harta-container"></div>
+      <div class="harta-jos">
+        <input type="text" id="harta-adresa-manuala" placeholder="sau scrie adresa manual" />
+        <div class="butoane-formular">
+          <button id="harta-confirma" class="buton buton-primar">Confirmă locația</button>
+          <button id="harta-anuleaza" class="buton buton-secundar">Renunță</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <template id="sablon-formular-service">
     <div class="card card-formular">

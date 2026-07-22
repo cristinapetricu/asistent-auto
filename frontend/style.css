@@ -467,3 +467,59 @@ input[type="text"], input[type="email"], input[type="password"], input[type="dat
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ---------- selector locație pe hartă ---------- */
+
+.locatie-selectata {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--mono-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.overlay-harta {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+
+.harta-panou {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.harta-antet {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.harta-container {
+  height: 280px;
+  width: 100%;
+}
+
+.harta-jos {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+

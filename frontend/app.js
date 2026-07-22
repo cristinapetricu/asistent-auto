@@ -69,6 +69,100 @@ async function tokenCurent() {
   return data.session?.access_token || null;
 }
 
+// ---------- selector de locație pe hartă ----------
+
+let hartaLeaflet = null;
+let hartaMarker = null;
+
+function deschideSelectorLocatie(valoareInitiala) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById("overlay-harta");
+    const status = document.getElementById("harta-status");
+    const campManual = document.getElementById("harta-adresa-manuala");
+    campManual.value = valoareInitiala?.text || "";
+    overlay.classList.remove("ascuns");
+
+    let locatieCurenta = valoareInitiala?.lat ? { lat: valoareInitiala.lat, lon: valoareInitiala.lon } : null;
+
+    setTimeout(() => {
+      if (hartaLeaflet) { hartaLeaflet.remove(); hartaLeaflet = null; }
+      const centruInitial = locatieCurenta || { lat: 45.9432, lon: 24.9668 }; // centrul României, dacă nu știm nimic
+      hartaLeaflet = L.map("harta-container").setView([centruInitial.lat, centruInitial.lon], locatieCurenta ? 15 : 6);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(hartaLeaflet);
+
+      function puneMarker(lat, lon) {
+        locatieCurenta = { lat, lon };
+        if (hartaMarker) hartaMarker.remove();
+        hartaMarker = L.marker([lat, lon], { draggable: true }).addTo(hartaLeaflet);
+        hartaMarker.on("dragend", (e) => {
+          const p = e.target.getLatLng();
+          locatieCurenta = { lat: p.lat, lon: p.lng };
+        });
+      }
+
+      if (locatieCurenta) puneMarker(locatieCurenta.lat, locatieCurenta.lon);
+
+      hartaLeaflet.on("click", (e) => puneMarker(e.latlng.lat, e.latlng.lng));
+
+      if (!valoareInitiala?.lat && navigator.geolocation) {
+        status.textContent = "Se caută locația...";
+        navigator.geolocation.getCurrentPosition(
+          (poz) => {
+            const { latitude, longitude } = poz.coords;
+            hartaLeaflet.setView([latitude, longitude], 15);
+            puneMarker(latitude, longitude);
+            status.textContent = "Locație găsită automat — poți muta pinul dacă nu e exact.";
+          },
+          () => {
+            status.textContent = "Nu am putut lua locația automat — pune pinul manual pe hartă sau scrie adresa jos.";
+          },
+          { timeout: 8000 }
+        );
+      } else if (valoareInitiala?.lat) {
+        status.textContent = "Poți muta pinul dacă vrei să corectezi locația.";
+      } else {
+        status.textContent = "Pune pinul manual pe hartă sau scrie adresa jos.";
+      }
+    }, 50);
+
+    async function reverseGeocode(lat, lon) {
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+        const d = await r.json();
+        return d.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      } catch (e) {
+        return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      }
+    }
+
+    function curata() {
+      overlay.classList.add("ascuns");
+      if (hartaLeaflet) { hartaLeaflet.remove(); hartaLeaflet = null; hartaMarker = null; }
+      document.getElementById("harta-confirma").onclick = null;
+      document.getElementById("harta-anuleaza").onclick = null;
+      document.getElementById("harta-inchide").onclick = null;
+    }
+
+    document.getElementById("harta-confirma").onclick = async () => {
+      if (campManual.value.trim() && !locatieCurenta) {
+        curata();
+        resolve({ text: campManual.value.trim(), lat: null, lon: null });
+        return;
+      }
+      if (!locatieCurenta) {
+        curata();
+        resolve(null);
+        return;
+      }
+      const text = campManual.value.trim() || (await reverseGeocode(locatieCurenta.lat, locatieCurenta.lon));
+      curata();
+      resolve({ text, lat: locatieCurenta.lat, lon: locatieCurenta.lon });
+    };
+    document.getElementById("harta-anuleaza").onclick = () => { curata(); resolve(undefined); };
+    document.getElementById("harta-inchide").onclick = () => { curata(); resolve(undefined); };
+  });
+}
+
 // ---------- autentificare ----------
 
 document.querySelectorAll(".tab-auth-buton").forEach((buton) => {
@@ -409,7 +503,7 @@ async function randeazaCombustibil() {
       <div class="stanga">
         <div class="eticheta-tip">${tipNume}</div>
         <div class="card-nume">${c.descriere || tipNume}</div>
-        <div class="card-detalii">${formatDataRO(c.data)}${c.km ? " · " + c.km.toLocaleString("ro-RO") + " km" : ""}${c.litri ? " · " + c.litri + " L" : ""}</div>
+        <div class="card-detalii">${formatDataRO(c.data)}${c.km ? " · " + c.km.toLocaleString("ro-RO") + " km" : ""}${c.litri ? " · " + c.litri + " L" : ""}${c.locatie_text ? " · 📍 " + c.locatie_text : ""}</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <div class="suma">${formatBani(c.suma)}</div>
@@ -450,7 +544,29 @@ function creeazaFormularCheltuiala(existent) {
   const campSuma = card.querySelector('[data-rol="suma"]');
   const campDescriere = card.querySelector('[data-rol="descriere"]');
   const wrapLitri = card.querySelector('[data-rol="camp-litri-wrap"]');
+  const butonLocatie = card.querySelector('[data-rol="buton-locatie"]');
+  const elLocatieText = card.querySelector('[data-rol="locatie-text"]');
   let tipSelectat = existent?.tip || "combustibil";
+  let locatie = existent?.locatie_text ? { text: existent.locatie_text, lat: existent.latitudine, lon: existent.longitudine } : null;
+
+  function actualizeazaLocatieAfisata() {
+    if (locatie) {
+      elLocatieText.textContent = "📍 " + locatie.text;
+      elLocatieText.classList.remove("ascuns");
+      butonLocatie.textContent = "📍 Schimbă locația";
+    } else {
+      elLocatieText.classList.add("ascuns");
+      butonLocatie.textContent = "📍 Adaugă locație";
+    }
+  }
+  actualizeazaLocatieAfisata();
+
+  butonLocatie.onclick = async () => {
+    const rezultat = await deschideSelectorLocatie(locatie);
+    if (rezultat === undefined) return; // anulat, nu schimbăm nimic
+    locatie = rezultat; // poate fi null, dacă a confirmat fără nimic
+    actualizeazaLocatieAfisata();
+  };
 
   function actualizeazaVizibilitateLitri() {
     wrapLitri.style.display = tipSelectat === "combustibil" ? "flex" : "none";
@@ -490,6 +606,9 @@ function creeazaFormularCheltuiala(existent) {
       litri: tipSelectat === "combustibil" && campLitri.value ? Number(campLitri.value) : null,
       suma: Number(campSuma.value),
       descriere: campDescriere.value.trim(),
+      locatie_text: locatie?.text || null,
+      latitudine: locatie?.lat ?? null,
+      longitudine: locatie?.lon ?? null,
     };
     if (existent) {
       await supa.from("cheltuieli").update(valori).eq("id", existent.id);
