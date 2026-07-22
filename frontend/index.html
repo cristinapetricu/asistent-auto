@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asistent Auto</title>
+<meta name="theme-color" content="#10141C" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+  <!-- ECRAN AUTENTIFICARE -->
+  <div id="ecran-auth" class="ecran-auth">
+    <div class="auth-card">
+      <div class="auth-sigla">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2FA8A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2-6a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 6"/><path d="M3 13h18v4a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4z"/><circle cx="7.5" cy="15.5" r="0" /></svg>
+        <span>Asistent Auto</span>
+      </div>
+      <p class="auth-subtitlu">Documente, combustibil și service — la un loc, pentru mașina ta.</p>
+
+      <div id="tab-autentificare" class="tab-auth">
+        <button class="tab-auth-buton activ" data-tab="login">Autentificare</button>
+        <button class="tab-auth-buton" data-tab="inregistrare">Cont nou</button>
+      </div>
+
+      <form id="formular-login" class="formular-auth">
+        <label class="eticheta">Email</label>
+        <input type="email" id="login-email" required autocomplete="email" />
+        <label class="eticheta">Parolă</label>
+        <input type="password" id="login-parola" required autocomplete="current-password" />
+        <button type="submit" class="buton buton-primar buton-lat">Intră în cont</button>
+      </form>
+
+      <form id="formular-inregistrare" class="formular-auth ascuns">
+        <label class="eticheta">Email</label>
+        <input type="email" id="reg-email" required autocomplete="email" />
+        <label class="eticheta">Parolă</label>
+        <input type="password" id="reg-parola" required minlength="6" autocomplete="new-password" />
+        <p class="auth-nota">Minim 6 caractere.</p>
+        <button type="submit" class="buton buton-primar buton-lat">Creează cont</button>
+      </form>
+
+      <div id="auth-mesaj" class="auth-mesaj ascuns"></div>
+    </div>
+  </div>
+
+  <!-- APLICAȚIA PROPRIU-ZISĂ -->
+  <div id="app" class="app ascuns">
+    <header class="antet">
+      <div class="antet-stanga">
+        <select id="selector-vehicul" class="selector-vehicul"></select>
+      </div>
+      <div class="antet-dreapta">
+        <button id="btn-adauga-vehicul" class="buton-icon" title="Adaugă vehicul">+</button>
+        <button id="btn-delogare" class="buton-icon" title="Ieși din cont">⏻</button>
+      </div>
+    </header>
+
+    <div id="banner-notificari" class="banner ascuns">
+      <div class="banner-continut">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2FA8A0" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div>
+          <div class="banner-titlu" id="banner-titlu">Activează notificările</div>
+          <div class="banner-text" id="banner-text">Primești o notificare reală când un document e aproape de expirare — chiar și cu aplicația închisă.</div>
+        </div>
+      </div>
+      <button id="btn-permite" class="buton buton-primar">Permite</button>
+    </div>
+
+    <main id="continut-principal" class="continut-principal"></main>
+
+    <nav class="navigare-jos">
+      <button class="tab-navigare activ" data-sectiune="documente">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        <span>Documente</span>
+      </button>
+      <button class="tab-navigare" data-sectiune="combustibil">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 22h12"/><path d="M4 9h9"/><path d="M4 22V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v18"/><path d="M15 8h2a2 2 0 0 1 2 2v2.5a1.5 1.5 0 0 0 3 0V9a2 2 0 0 0-.6-1.4L19 5.5"/></svg>
+        <span>Combustibil</span>
+      </button>
+      <button class="tab-navigare" data-sectiune="service">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.77z"/></svg>
+        <span>Service</span>
+      </button>
+    </nav>
+  </div>
+
+  <template id="sablon-formular-document">
+    <div class="card card-formular">
+      <div>
+        <label class="eticheta">Tip document</label>
+        <div class="chipuri" data-rol="chipuri"></div>
+      </div>
+      <div>
+        <label class="eticheta">Denumire</label>
+        <input type="text" data-rol="nume" placeholder="ex: Rovinietă" />
+      </div>
+      <div class="rand-dublu">
+        <div>
+          <label class="eticheta">Data expirării</label>
+          <input type="date" data-rol="data" />
+        </div>
+        <div class="camp-ingust">
+          <label class="eticheta">Alertă cu (zile)</label>
+          <input type="number" min="1" data-rol="prealarma" value="7" />
+        </div>
+      </div>
+      <div>
+        <label class="eticheta">Notă (opțional)</label>
+        <input type="text" data-rol="nota" placeholder="opțional" />
+      </div>
+      <div class="butoane-formular">
+        <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
+        <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="sablon-formular-cheltuiala">
+    <div class="card card-formular">
+      <div>
+        <label class="eticheta">Tip</label>
+        <div class="chipuri" data-rol="chipuri-tip"></div>
+      </div>
+      <div class="rand-dublu">
+        <div>
+          <label class="eticheta">Data</label>
+          <input type="date" data-rol="data" />
+        </div>
+        <div>
+          <label class="eticheta">Kilometraj curent</label>
+          <input type="number" min="0" data-rol="km" placeholder="opțional" />
+        </div>
+      </div>
+      <div class="rand-dublu" data-rol="camp-litri-wrap">
+        <div>
+          <label class="eticheta">Litri</label>
+          <input type="number" step="0.01" min="0" data-rol="litri" placeholder="doar la combustibil" />
+        </div>
+        <div>
+          <label class="eticheta">Sumă totală (lei)</label>
+          <input type="number" step="0.01" min="0" data-rol="suma" />
+        </div>
+      </div>
+      <div>
+        <label class="eticheta">Descriere (opțional)</label>
+        <input type="text" data-rol="descriere" placeholder="ex: Petrom A1" />
+      </div>
+      <div class="butoane-formular">
+        <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
+        <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="sablon-formular-service">
+    <div class="card card-formular">
+      <div class="rand-dublu">
+        <div>
+          <label class="eticheta">Data</label>
+          <input type="date" data-rol="data" />
+        </div>
+        <div>
+          <label class="eticheta">Kilometraj</label>
+          <input type="number" min="0" data-rol="km" placeholder="opțional" />
+        </div>
+      </div>
+      <div>
+        <label class="eticheta">Ce s-a făcut</label>
+        <input type="text" data-rol="descriere" placeholder="ex: Schimb ulei și filtre" />
+      </div>
+      <div class="rand-dublu">
+        <div>
+          <label class="eticheta">Cost (lei, opțional)</label>
+          <input type="number" step="0.01" min="0" data-rol="cost" />
+        </div>
+        <div>
+          <label class="eticheta">Unde (opțional)</label>
+          <input type="text" data-rol="unde" placeholder="ex: Service Auto Ion" />
+        </div>
+      </div>
+      <div class="butoane-formular">
+        <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
+        <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="sablon-formular-vehicul">
+    <div class="card card-formular">
+      <div>
+        <label class="eticheta">Nume vehicul</label>
+        <input type="text" data-rol="nume" placeholder="ex: Dacia Logan" />
+      </div>
+      <div>
+        <label class="eticheta">Număr înmatriculare (opțional)</label>
+        <input type="text" data-rol="numar" placeholder="ex: GJ 00 XYZ" />
+      </div>
+      <div class="butoane-formular">
+        <button class="buton buton-primar" data-rol="salveaza">Salvează</button>
+        <button class="buton buton-secundar" data-rol="anuleaza">Renunță</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
